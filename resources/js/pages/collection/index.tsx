@@ -1,4 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
+import { useState } from 'react';
 import { AllRented } from '@/components/store/all-rented';
 import { Clamshell } from '@/components/store/clamshell';
 import { OsdText } from '@/components/store/crt-screen';
@@ -7,6 +8,7 @@ import {
     RentalSticker,
 } from '@/components/store/format-sticker';
 import { PageSign } from '@/components/store/page-sign';
+import { Input } from '@/components/ui/input';
 import { CoverShelf } from '@/components/store/cover-shelf';
 import { formatPrice } from '@/lib/store';
 import { cn } from '@/lib/utils';
@@ -47,6 +49,26 @@ export default function CollectionIndex({
     recentCopies,
     hotDeals,
 }: Props) {
+    const [search, setSearch] = useState('');
+    const needle = search.trim().toLowerCase();
+
+    const matches = (movie: MovieCard) =>
+        needle === '' ||
+        movie.title.toLowerCase().includes(needle) ||
+        (movie.directors ?? []).some((director) =>
+            director.name.toLowerCase().includes(needle),
+        );
+
+    const visibleMovies = allMovies.filter(matches);
+    const visibleShelves = shelves
+        .map((shelf) => ({ ...shelf, movies: shelf.movies.filter(matches) }))
+        .filter((shelf) => shelf.movies.length > 0);
+    const nothingMatches =
+        needle !== '' &&
+        (group === 'all'
+            ? visibleMovies.length === 0
+            : visibleShelves.length === 0);
+
     return (
         <>
             <Head title="My shelf" />
@@ -86,6 +108,14 @@ export default function CollectionIndex({
                 {hotDeals.length > 0 && <HotDeals deals={hotDeals} />}
 
                 <section className="space-y-6">
+                    <Input
+                        type="search"
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder="Search my shelf by title or director"
+                        aria-label="Search my shelf"
+                        className="max-w-md"
+                    />
                     <div className="flex flex-wrap items-center gap-3">
                         <h2 className="text-sm text-muted-foreground">
                             Rack by
@@ -136,15 +166,19 @@ export default function CollectionIndex({
                             </Link>{' '}
                             and add the copy you own.
                         </AllRented>
+                    ) : nothingMatches ? (
+                        <p className="text-lg text-muted-foreground">
+                            Nothing on your shelf matches "{search.trim()}".
+                        </p>
                     ) : group === 'all' ? (
                         <div className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                            {allMovies.map((movie) => (
+                            {visibleMovies.map((movie) => (
                                 <Clamshell key={movie.id} movie={movie} />
                             ))}
                         </div>
                     ) : (
                         <div className="space-y-12">
-                            {shelves.map((shelf) => (
+                            {visibleShelves.map((shelf) => (
                                 <CoverShelf key={shelf.key} shelf={shelf} />
                             ))}
                         </div>
