@@ -1,5 +1,12 @@
 import { Link } from '@inertiajs/react';
-import { Archive, Clapperboard, Library, Megaphone, Tag } from 'lucide-react';
+import {
+    Archive,
+    Clapperboard,
+    Layers,
+    Library,
+    Megaphone,
+    Tag,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -14,6 +21,7 @@ import {
 } from '@/components/ui/sidebar';
 import { index as collection } from '@/routes/collection';
 import { index as directors } from '@/routes/directors';
+import { index as franchises } from '@/routes/franchises';
 import { index as backRoom } from '@/routes/imports';
 import { index as aisles } from '@/routes/movies';
 import { index as wantList } from '@/routes/watches';
@@ -23,6 +31,7 @@ const storeNavItems: NavItem[] = [
     { title: 'My shelf', href: collection(), icon: Library },
     { title: 'The aisles', href: aisles(), icon: Clapperboard },
     { title: "Directors' row", href: directors(), icon: Megaphone },
+    { title: 'Franchises', href: franchises(), icon: Layers },
     { title: 'Want list', href: wantList(), icon: Tag },
 ];
 

@@ -178,13 +178,13 @@ export default function AislesIndex({
                             htmlFor="aisle-search"
                             className="text-xs text-muted-foreground"
                         >
-                            Title
+                            Title or director
                         </Label>
                         <Input
                             id="aisle-search"
                             type="search"
                             value={search}
-                            placeholder="Search for a tape"
+                            placeholder="The Beyond, Fulci…"
                             onChange={(event) => searchFor(event.target.value)}
                         />
                     </div>

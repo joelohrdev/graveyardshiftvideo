@@ -31,7 +31,7 @@ class MovieController extends Controller
      */
     public const array Sorts = [
         'popular' => ['popularity', 'desc'],
-        'title' => ['title', 'asc'],
+        'title' => ['sort_title', 'asc'],
         'newest' => ['release_date', 'desc'],
         'oldest' => ['release_date', 'asc'],
         'rating' => ['vote_average', 'desc'],
@@ -57,7 +57,11 @@ class MovieController extends Controller
 
         $movies = Movie::query()
             ->withCopiesOf($user)
-            ->when($filters['q'] ?? null, fn (Builder $query, string $search) => $query->where('title', 'like', "%{$search}%"))
+            ->when($filters['q'] ?? null, fn (Builder $query, string $search) => $query->where(
+                fn (Builder $matches) => $matches
+                    ->where('title', 'like', "%{$search}%")
+                    ->orWhereHas('directors', fn (Builder $directors) => $directors->where('name', 'like', "%{$search}%")),
+            ))
             ->when($request->boolean('owned'), fn (Builder $query) => $query->ownedBy($user))
             ->when($filters['format'] ?? null, fn (Builder $query, string $format) => $query->whereHas(
                 'copies',
@@ -126,7 +130,20 @@ class MovieController extends Controller
             ]),
         ]);
 
+        $franchise = $movie->franchise()
+            ->withCount(['movies', 'movies as owned_count' => fn (Builder $movies) => $movies->whereHas(
+                'copies',
+                fn (Builder $copies) => $copies->whereBelongsTo($user),
+            )])
+            ->first();
+
         return Inertia::render('movies/show', [
+            'franchise' => $franchise === null ? null : [
+                'id' => $franchise->id,
+                'name' => $franchise->displayName(),
+                'movies_count' => $franchise->movies_count,
+                'owned_count' => $franchise->owned_count,
+            ],
             'movie' => [
                 'id' => $movie->id,
                 'tmdb_id' => $movie->tmdb_id,

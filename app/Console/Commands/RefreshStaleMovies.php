@@ -2,7 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\SyncFranchiseParts;
 use App\Jobs\SyncMovieDetails;
+use App\Models\Franchise;
 use App\Models\Movie;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -35,7 +37,14 @@ class RefreshStaleMovies extends Command
 
         $stale->each(fn (Movie $movie) => SyncMovieDetails::dispatch($movie));
 
-        $this->components->info("Queued {$stale->count()} stale movies for a TMDB refresh (daily cap {$dailyCap}).");
+        $staleFranchises = Franchise::query()
+            ->where('parts_synced_at', '<', now()->subMonths(self::StaleAfterMonths))
+            ->limit($dailyCap)
+            ->get();
+
+        $staleFranchises->each(fn (Franchise $franchise) => SyncFranchiseParts::dispatch($franchise));
+
+        $this->components->info("Queued {$stale->count()} stale movies and {$staleFranchises->count()} franchises for a TMDB refresh (daily cap {$dailyCap}).");
 
         return self::SUCCESS;
     }

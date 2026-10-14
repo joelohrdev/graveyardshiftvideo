@@ -7,6 +7,7 @@ use App\Jobs\SyncMovieDetails;
 use App\Models\Copy;
 use App\Models\ExcludedMovie;
 use App\Models\Movie;
+use App\Services\Tmdb\CatalogWriter;
 use App\Services\Tmdb\TmdbClient;
 use Illuminate\Bus\PendingBatch;
 use Illuminate\Support\Facades\Bus;
@@ -54,7 +55,7 @@ test('a discover page upserts movies and queues details for the unsynced ones', 
     Queue::fake([SyncMovieDetails::class]);
     Movie::factory()->create(['tmdb_id' => 11, 'title' => 'Old title', 'details_synced_at' => now()]);
 
-    (new ImportDiscoverPage(27, 1981))->handle(app(TmdbClient::class));
+    (new ImportDiscoverPage(27, 1981))->handle(app(TmdbClient::class), app(CatalogWriter::class));
 
     expect(Movie::query()->orderBy('tmdb_id')->pluck('title', 'tmdb_id')->all())
         ->toBe([10 => 'The Evil Dead', 11 => 'An American Werewolf in London']);
@@ -71,7 +72,7 @@ test('the first discover page fans the remaining pages into the batch', function
 
     [$job, $batch] = (new ImportDiscoverPage(27, 1981))->withFakeBatch();
 
-    $job->handle(app(TmdbClient::class));
+    $job->handle(app(TmdbClient::class), app(CatalogWriter::class));
 
     $pageJobs = collect($batch->added)->whereInstanceOf(ImportDiscoverPage::class);
     expect($pageJobs->pluck('page')->all())->toBe([2, 3]);
@@ -85,8 +86,8 @@ test('re-running a discover page does not duplicate movies', function () {
     ]);
     Queue::fake([SyncMovieDetails::class]);
 
-    (new ImportDiscoverPage(27, 1981))->handle(app(TmdbClient::class));
-    (new ImportDiscoverPage(27, 1981))->handle(app(TmdbClient::class));
+    (new ImportDiscoverPage(27, 1981))->handle(app(TmdbClient::class), app(CatalogWriter::class));
+    (new ImportDiscoverPage(27, 1981))->handle(app(TmdbClient::class), app(CatalogWriter::class));
 
     expect(Movie::count())->toBe(1);
 });
@@ -102,7 +103,7 @@ test('a discover page skips movies that were removed from the store', function (
     Queue::fake([SyncMovieDetails::class]);
     ExcludedMovie::factory()->create(['tmdb_id' => 11]);
 
-    (new ImportDiscoverPage(27, 1981))->handle(app(TmdbClient::class));
+    (new ImportDiscoverPage(27, 1981))->handle(app(TmdbClient::class), app(CatalogWriter::class));
 
     expect(Movie::pluck('tmdb_id')->all())->toBe([10]);
     Queue::assertPushed(SyncMovieDetails::class, 1);

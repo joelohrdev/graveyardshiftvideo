@@ -62,7 +62,7 @@ class CollectionController extends Controller
             'shelves' => $group === 'all' ? [] : $this->shelves($movies, $group),
             'allMovies' => $group === 'all'
                 ? MovieCardResource::collection(
-                    $movies->sortBy(fn (Movie $movie): string => mb_strtolower($movie->title))->values(),
+                    $movies->sortBy(fn (Movie $movie): string => $movie->sort_title ?? Movie::sortableTitle($movie->title))->values(),
                 )->resolve()
                 : [],
             'stats' => [

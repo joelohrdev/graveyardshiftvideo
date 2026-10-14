@@ -49,9 +49,9 @@ test('shelves group my movies by director, biggest shelf first', function () {
             ->where('stats.directors', 2));
 });
 
-test('my shelf lists every movie A to Z by default', function () {
+test('my shelf lists every movie A to Z by default, ignoring a leading article', function () {
     $user = User::factory()->create();
-    foreach (['the Thing', 'Halloween', 'Alien', 'Suspiria'] as $title) {
+    foreach (['The Thing', 'Halloween', 'Alien', 'Suspiria'] as $title) {
         Copy::factory()->for($user)->for(Movie::factory()->state(['title' => $title]))->create();
     }
     Copy::factory()->for(Movie::factory()->state(['title' => 'Not Mine']))->create();
@@ -62,7 +62,7 @@ test('my shelf lists every movie A to Z by default', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->where('group', 'all')
             ->where('shelves', [])
-            ->where('allMovies', fn ($movies) => collect($movies)->pluck('title')->all() === ['Alien', 'Halloween', 'Suspiria', 'the Thing']));
+            ->where('allMovies', fn ($movies) => collect($movies)->pluck('title')->all() === ['Alien', 'Halloween', 'Suspiria', 'The Thing']));
 });
 
 test('shelves group by decade and by format', function () {

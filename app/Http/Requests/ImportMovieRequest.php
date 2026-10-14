@@ -20,6 +20,7 @@ class ImportMovieRequest extends FormRequest
             'tmdb_id' => ['required', 'integer', 'min:1'],
             'title' => ['required', 'string', 'max:255'],
             'format' => ['nullable', Rule::enum(MediaFormat::class)],
+            'barcode' => ['nullable', 'regex:/^\d{8,14}$/'],
         ];
     }
 }

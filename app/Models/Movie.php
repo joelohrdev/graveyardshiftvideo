@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
@@ -17,7 +18,9 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $tmdb_id
+ * @property int|null $franchise_id
  * @property string $title
+ * @property string|null $sort_title Lowercased title without a leading article, for shelf order
  * @property string|null $original_title
  * @property string|null $overview
  * @property Carbon|null $release_date
@@ -35,7 +38,7 @@ use Illuminate\Support\Carbon;
  * @property-read Credit $pivot The credit row when loaded through a credits relation
  */
 #[Fillable([
-    'tmdb_id', 'title', 'original_title', 'overview', 'release_date', 'release_year', 'runtime',
+    'tmdb_id', 'franchise_id', 'title', 'sort_title', 'original_title', 'overview', 'release_date', 'release_year', 'runtime',
     'poster_path', 'backdrop_path', 'original_language', 'vote_average', 'vote_count', 'popularity',
     'details_synced_at',
 ])]
@@ -43,6 +46,28 @@ class Movie extends Model
 {
     /** @use HasFactory<MovieFactory> */
     use HasFactory;
+
+    /**
+     * Keep the shelf-order title in step with the title.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Movie $movie): void {
+            $movie->sort_title = static::sortableTitle($movie->title);
+        });
+    }
+
+    /**
+     * How a video store shelves a title: ignore a leading "The", "A" or "An" and any
+     * leading punctuation, so "The Thing" sits under T and "'Salem's Lot" under S.
+     */
+    public static function sortableTitle(string $title): string
+    {
+        $sortable = mb_strtolower(trim($title));
+        $sortable = (string) preg_replace('/^(the|an|a)\s+(?=\S)/u', '', $sortable);
+
+        return (string) preg_replace('/^[^\p{L}\p{N}]+/u', '', $sortable) ?: mb_strtolower(trim($title));
+    }
 
     /**
      * Get the attributes that should be cast.
@@ -99,6 +124,14 @@ class Movie extends Model
     public function keywords(): BelongsToMany
     {
         return $this->belongsToMany(Keyword::class);
+    }
+
+    /**
+     * @return BelongsTo<Franchise, $this>
+     */
+    public function franchise(): BelongsTo
+    {
+        return $this->belongsTo(Franchise::class);
     }
 
     /**

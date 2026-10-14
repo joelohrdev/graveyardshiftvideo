@@ -79,6 +79,22 @@ class TmdbClient
         return $response->throw()->json();
     }
 
+    /**
+     * A TMDB collection (a movie series) with all of its parts, or null when it no longer exists.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function collection(int $collectionId): ?array
+    {
+        $response = $this->request()->get("collection/{$collectionId}");
+
+        if ($response->notFound()) {
+            return null;
+        }
+
+        return $response->throw()->json();
+    }
+
     protected function request(): PendingRequest
     {
         return Http::baseUrl(config('services.tmdb.base_url'))

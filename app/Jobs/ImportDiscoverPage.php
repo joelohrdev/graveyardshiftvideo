@@ -2,8 +2,8 @@
 
 namespace App\Jobs;
 
-use App\Models\ExcludedMovie;
 use App\Models\Movie;
+use App\Services\Tmdb\CatalogWriter;
 use App\Services\Tmdb\TmdbClient;
 use DateTimeInterface;
 use Illuminate\Bus\Batchable;
@@ -45,7 +45,7 @@ class ImportDiscoverPage implements ShouldQueue
         return now()->addDay();
     }
 
-    public function handle(TmdbClient $tmdb): void
+    public function handle(TmdbClient $tmdb, CatalogWriter $catalog): void
     {
         if ($this->batch()?->cancelled()) {
             return;
@@ -64,26 +64,14 @@ class ImportDiscoverPage implements ShouldQueue
             return;
         }
 
-        $excluded = ExcludedMovie::query()
-            ->whereIn('tmdb_id', array_column($discovered['results'], 'id'))
-            ->pluck('tmdb_id')
-            ->all();
+        $tmdbIds = $catalog->upsertResults($discovered['results'], $this->year);
 
-        $results = array_values(array_filter(
-            $discovered['results'],
-            fn (array $result): bool => ! in_array((int) $result['id'], $excluded, true),
-        ));
-
-        if ($results === []) {
+        if ($tmdbIds === []) {
             return;
         }
 
-        $rows = array_map($this->movieRow(...), $results);
-
-        Movie::upsert($rows, ['tmdb_id'], array_keys(array_diff_key($rows[0], ['tmdb_id' => true, 'created_at' => true])));
-
         $needsDetails = Movie::query()
-            ->whereIn('tmdb_id', array_column($rows, 'tmdb_id'))
+            ->whereIn('tmdb_id', $tmdbIds)
             ->when(! $this->refresh, fn ($query) => $query->whereNull('details_synced_at'))
             ->get();
 
@@ -100,31 +88,5 @@ class ImportDiscoverPage implements ShouldQueue
                 dispatch($job);
             }
         }
-    }
-
-    /**
-     * @param  array<string, mixed>  $result
-     * @return array<string, mixed>
-     */
-    protected function movieRow(array $result): array
-    {
-        $releaseDate = filled($result['release_date'] ?? null) ? $result['release_date'] : null;
-
-        return [
-            'tmdb_id' => (int) $result['id'],
-            'title' => (string) $result['title'],
-            'original_title' => $result['original_title'] ?? null,
-            'overview' => filled($result['overview'] ?? null) ? $result['overview'] : null,
-            'release_date' => $releaseDate,
-            'release_year' => $releaseDate !== null ? (int) substr($releaseDate, 0, 4) : $this->year,
-            'poster_path' => $result['poster_path'] ?? null,
-            'backdrop_path' => $result['backdrop_path'] ?? null,
-            'original_language' => $result['original_language'] ?? null,
-            'vote_average' => (float) ($result['vote_average'] ?? 0),
-            'vote_count' => (int) ($result['vote_count'] ?? 0),
-            'popularity' => (float) ($result['popularity'] ?? 0),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ];
     }
 }

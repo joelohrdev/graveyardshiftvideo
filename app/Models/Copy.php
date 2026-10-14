@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
  * @property int $user_id
  * @property int $movie_id
  * @property MediaFormat $format
+ * @property string|null $barcode UPC/EAN printed on the case, when the copy was scanned in
  * @property string|null $edition
  * @property string|null $condition
  * @property Carbon|null $acquired_on
@@ -22,7 +23,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['movie_id', 'format', 'edition', 'condition', 'acquired_on', 'notes'])]
+#[Fillable(['movie_id', 'format', 'barcode', 'edition', 'condition', 'acquired_on', 'notes'])]
 class Copy extends Model
 {
     /** @use HasFactory<CopyFactory> */

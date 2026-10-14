@@ -8,6 +8,7 @@ use App\Jobs\SyncMovieDetails;
 use App\Models\Copy;
 use App\Models\ExcludedMovie;
 use App\Models\Movie;
+use App\Services\Barcode\BarcodeLookup;
 use App\Services\Tmdb\TmdbClient;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -72,6 +73,46 @@ class MovieImportController extends Controller
     }
 
     /**
+     * Identify a scanned case: the movie title, year and format to search TMDB with,
+     * or the copy already on my shelf with that barcode.
+     */
+    public function barcode(Request $request, BarcodeLookup $lookup): JsonResponse
+    {
+        $validated = $request->validate(['code' => ['required', 'regex:/^\d{8,14}$/']]);
+        $code = $validated['code'];
+
+        $owned = $request->user()->copies()->with('movie')->firstWhere('barcode', $code);
+
+        if ($owned !== null) {
+            return response()->json(['owned' => [
+                'movie_id' => $owned->movie_id,
+                'title' => $owned->movie->title,
+                'format_label' => $owned->format->label(),
+            ]]);
+        }
+
+        if (blank(config('services.ebay.client_id')) || blank(config('services.ebay.client_secret'))) {
+            return response()->json(['message' => 'Barcode lookup uses eBay. Add EBAY_CLIENT_ID and EBAY_CLIENT_SECRET to .env, or search by title.'], 503);
+        }
+
+        try {
+            $found = $lookup->lookup($code);
+        } catch (ConnectionException|RequestException $exception) {
+            report($exception);
+
+            return response()->json(['message' => 'eBay did not answer. Try again, or search by title.'], 502);
+        }
+
+        return response()->json([
+            'barcode' => $code,
+            'title' => $found['title'],
+            'year' => $found['year'],
+            'format' => $found['format']?->value,
+            'listings' => $found['listings'],
+        ]);
+    }
+
+    /**
      * The title part of a "Director's Title" search, or null when there's no possessive credit.
      */
     protected function withoutPossessiveCredit(string $query): ?string
@@ -109,7 +150,11 @@ class MovieImportController extends Controller
             return to_route('movies.show', $movie);
         }
 
-        $request->user()->copies()->create(['movie_id' => $movie->id, 'format' => $format]);
+        $request->user()->copies()->create([
+            'movie_id' => $movie->id,
+            'format' => $format,
+            'barcode' => $request->validated('barcode'),
+        ]);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => "{$format->label()} copy of {$movie->title} added to your shelf."]);
 

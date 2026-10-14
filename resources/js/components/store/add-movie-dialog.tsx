@@ -1,6 +1,6 @@
 import { router, useHttp } from '@inertiajs/react';
-import { Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Plus, ScanBarcode } from 'lucide-react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { OsdText } from '@/components/store/crt-screen';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { formatLabels, tmdbImage } from '@/lib/store';
 import type { FormatValue } from '@/types';
-import { show, store, tmdbSearch } from '@/routes/movies';
+import { barcode, show, store, tmdbSearch } from '@/routes/movies';
 
 type SearchResult = {
     tmdb_id: number;
@@ -35,13 +35,48 @@ type SearchResult = {
     owned_formats: FormatValue[];
 };
 
+// The barcode reader is large, so it only loads when the camera opens.
+const BarcodeScanner = lazy(() =>
+    import('@/components/store/barcode-scanner').then((module) => ({
+        default: module.BarcodeScanner,
+    })),
+);
+
+type BarcodeResult =
+    | { owned: { movie_id: number; title: string; format_label: string } }
+    | {
+          owned?: undefined;
+          barcode: string;
+          title: string | null;
+          year: number | null;
+          format: FormatValue | null;
+          listings: string[];
+      };
+
 /**
  * Finds a movie on TMDB by title, in any genre. From a result you can put a
  * copy straight on your shelf (importing the movie first if the store doesn't
  * have it) without leaving the search, or just add it to the store.
+ *
+ * With a barcode (scanned by camera or typed), eBay identifies the product and
+ * pre-fills the search, and the barcode is saved on the copy. With `scan`, the
+ * dialog opens straight into the camera and returns to it after each add, for
+ * cataloguing a stack of cases.
  */
-export function AddMovieDialog() {
+export function AddMovieDialog({ scan = false }: { scan?: boolean }) {
     const [open, setOpen] = useState(false);
+    const [scanning, setScanning] = useState(false);
+    const [scannedCode, setScannedCode] = useState<string | null>(null);
+    const [manualCode, setManualCode] = useState('');
+    const [ownedCopy, setOwnedCopy] = useState<{
+        movie_id: number;
+        title: string;
+        format_label: string;
+    } | null>(null);
+    const [barcodeNote, setBarcodeNote] = useState<string | null>(null);
+    const [defaultFormat, setDefaultFormat] = useState<FormatValue>('vhs');
+    const cataloguing = useRef(false);
+    const lookup = useHttp<Record<string, never>, BarcodeResult>({});
     const [adding, setAdding] = useState<number | null>(null);
     const [formats, setFormats] = useState<Record<number, FormatValue>>({});
     const [failed, setFailed] = useState(false);
@@ -82,17 +117,82 @@ export function AddMovieDialog() {
             {
                 tmdb_id: result.tmdb_id,
                 title: result.title,
-                format: formats[result.tmdb_id] ?? 'vhs',
+                format: formats[result.tmdb_id] ?? defaultFormat,
+                barcode: scannedCode,
             },
             {
                 preserveState: true,
                 preserveScroll: true,
                 onStart: () => setAdding(result.tmdb_id),
                 onFinish: () => setAdding(null),
-                // Refresh the results so the new format tag shows up.
-                onSuccess: () => void runSearch(),
+                onSuccess: () => {
+                    setScannedCode(null);
+                    setManualCode('');
+                    setBarcodeNote(null);
+
+                    if (cataloguing.current) {
+                        // Straight on to the next case in the stack.
+                        search.setData({ q: '', year: '' });
+                        setScanning(true);
+
+                        return;
+                    }
+
+                    // Refresh the results so the new format tag shows up.
+                    void runSearch();
+                },
             },
         );
+    };
+
+    const startScanning = () => {
+        cataloguing.current = true;
+        setOwnedCopy(null);
+        setBarcodeNote(null);
+        setScanning(true);
+    };
+
+    const identify = (code: string) => {
+        setScanning(false);
+        setScannedCode(code);
+        setManualCode(code);
+        setOwnedCopy(null);
+        setBarcodeNote(null);
+
+        lookup
+            .get(barcode.url({ query: { code } }))
+            .then((found) => {
+                if (found.owned) {
+                    setOwnedCopy(found.owned);
+
+                    return;
+                }
+
+                if (found.format) {
+                    setDefaultFormat(found.format);
+                }
+
+                if (found.title) {
+                    search.setData({
+                        q: found.title,
+                        year: found.year ? String(found.year) : '',
+                    });
+                    setBarcodeNote(
+                        found.listings[0]
+                            ? `Matched an eBay listing: "${found.listings[0]}". Pick the right movie below.`
+                            : null,
+                    );
+                } else {
+                    setBarcodeNote(
+                        `No eBay listings for barcode ${code}. Search by title below; the barcode is still saved with the copy.`,
+                    );
+                }
+            })
+            .catch(() =>
+                setBarcodeNote(
+                    "Couldn't look up that barcode (is eBay set up?). Search by title below; the barcode is still saved with the copy.",
+                ),
+            );
     };
 
     const addToStore = (result: SearchResult) => {
@@ -111,11 +211,25 @@ export function AddMovieDialog() {
         q.trim().length >= 2 ? (search.response?.results ?? []) : [];
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+            open={open}
+            onOpenChange={(next) => {
+                setOpen(next);
+
+                if (next && scan) {
+                    startScanning();
+                }
+
+                if (!next) {
+                    setScanning(false);
+                    cataloguing.current = false;
+                }
+            }}
+        >
             <DialogTrigger asChild>
                 <Button variant="secondary">
-                    <Plus />
-                    Add a movie
+                    {scan ? <ScanBarcode /> : <Plus />}
+                    {scan ? 'Scan a case' : 'Add a movie'}
                 </Button>
             </DialogTrigger>
             <DialogContent className="max-h-[85svh] overflow-y-auto sm:max-w-2xl">
@@ -126,6 +240,106 @@ export function AddMovieDialog() {
                         a copy on your shelf without leaving the search.
                     </DialogDescription>
                 </DialogHeader>
+
+                <div className="space-y-3">
+                    {scanning ? (
+                        <>
+                            <Suspense
+                                fallback={
+                                    <div className="static-skeleton aspect-video w-full" />
+                                }
+                            >
+                                <BarcodeScanner onDetected={identify} />
+                            </Suspense>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                    setScanning(false);
+                                    cataloguing.current = false;
+                                }}
+                            >
+                                Stop scanning
+                            </Button>
+                        </>
+                    ) : (
+                        <div className="flex flex-wrap items-end gap-2">
+                            <Button variant="secondary" onClick={startScanning}>
+                                <ScanBarcode />
+                                Scan barcode
+                            </Button>
+                            <form
+                                className="flex items-end gap-2"
+                                onSubmit={(event) => {
+                                    event.preventDefault();
+
+                                    if (/^\d{8,14}$/.test(manualCode.trim())) {
+                                        identify(manualCode.trim());
+                                    }
+                                }}
+                            >
+                                <Input
+                                    aria-label="Barcode digits"
+                                    inputMode="numeric"
+                                    value={manualCode}
+                                    placeholder="or type the barcode"
+                                    onChange={(event) =>
+                                        setManualCode(
+                                            event.target.value.replace(
+                                                /\D/g,
+                                                '',
+                                            ),
+                                        )
+                                    }
+                                    className="w-44"
+                                />
+                                <Button
+                                    type="submit"
+                                    variant="ghost"
+                                    disabled={
+                                        lookup.processing ||
+                                        !/^\d{8,14}$/.test(manualCode.trim())
+                                    }
+                                >
+                                    Look up
+                                </Button>
+                            </form>
+                        </div>
+                    )}
+
+                    {lookup.processing && (
+                        <OsdText blink className="text-2xl">
+                            READING BARCODE…
+                        </OsdText>
+                    )}
+
+                    {ownedCopy && (
+                        <div className="flex flex-wrap items-center gap-3 border border-tube/60 px-3 py-2">
+                            <span>
+                                Already on your shelf: {ownedCopy.title} (
+                                {ownedCopy.format_label})
+                            </span>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                    router.visit(show(ownedCopy.movie_id))
+                                }
+                            >
+                                Open
+                            </Button>
+                            <Button size="sm" onClick={startScanning}>
+                                Scan another
+                            </Button>
+                        </div>
+                    )}
+
+                    {barcodeNote && (
+                        <p className="text-sm text-muted-foreground">
+                            {barcodeNote}
+                        </p>
+                    )}
+                </div>
 
                 <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_8rem]">
                     <div className="grid gap-1.5">
@@ -225,7 +439,7 @@ export function AddMovieDialog() {
                                                     value={
                                                         formats[
                                                             result.tmdb_id
-                                                        ] ?? 'vhs'
+                                                        ] ?? defaultFormat
                                                     }
                                                     onValueChange={(format) =>
                                                         setFormats(

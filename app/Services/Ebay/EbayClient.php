@@ -63,6 +63,40 @@ class EbayClient
         return $listings;
     }
 
+    /**
+     * Titles and categories of listings for one exact product, found by its UPC/EAN barcode.
+     *
+     * @return list<array{title: string, categories: list<string>}>
+     */
+    public function listingsForBarcode(string $barcode): array
+    {
+        $response = $this->request()
+            ->get('buy/browse/v1/item_summary/search', [
+                'gtin' => $barcode,
+                'category_ids' => self::MoviesAndTvCategory,
+                'limit' => 50,
+            ])
+            ->throw();
+
+        $listings = [];
+
+        foreach ($response->json('itemSummaries') ?? [] as $item) {
+            if (! is_array($item) || ! isset($item['title'])) {
+                continue;
+            }
+
+            $listings[] = [
+                'title' => (string) $item['title'],
+                'categories' => array_values(array_map(
+                    fn (array $category): string => (string) ($category['categoryName'] ?? ''),
+                    array_filter($item['categories'] ?? [], 'is_array'),
+                )),
+            ];
+        }
+
+        return $listings;
+    }
+
     public function categoryFor(?MediaFormat $format): int
     {
         return match ($format) {

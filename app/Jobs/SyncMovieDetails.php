@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\CreditRole;
+use App\Models\Franchise;
 use App\Models\Genre;
 use App\Models\Keyword;
 use App\Models\Movie;
@@ -65,12 +66,36 @@ class SyncMovieDetails implements ShouldQueue
             return;
         }
 
-        DB::transaction(function () use ($details): void {
-            $this->movie->update($this->movieAttributes($details));
+        $franchise = $this->franchiseFor($details['belongs_to_collection'] ?? null);
+
+        DB::transaction(function () use ($details, $franchise): void {
+            $this->movie->update([...$this->movieAttributes($details), 'franchise_id' => $franchise?->id]);
             $this->movie->genres()->sync($this->upsertTaxonomy(Genre::class, $details['genres'] ?? []));
             $this->movie->keywords()->sync($this->upsertTaxonomy(Keyword::class, $details['keywords']['keywords'] ?? []));
             $this->syncCredits($details['credits'] ?? []);
         });
+
+        if ($franchise !== null && ($franchise->parts_synced_at === null || $franchise->parts_synced_at->lt(now()->subMonths(5)))) {
+            SyncFranchiseParts::dispatch($franchise);
+        }
+    }
+
+    /**
+     * The series this movie belongs to, created on first sight.
+     *
+     * @param  array{id?: int, name?: string, poster_path?: string|null, backdrop_path?: string|null}|null  $collection
+     */
+    protected function franchiseFor(?array $collection): ?Franchise
+    {
+        if (! isset($collection['id'], $collection['name'])) {
+            return null;
+        }
+
+        return Franchise::query()->firstOrCreate(['tmdb_id' => $collection['id']], [
+            'name' => $collection['name'],
+            'poster_path' => $collection['poster_path'] ?? null,
+            'backdrop_path' => $collection['backdrop_path'] ?? null,
+        ]);
     }
 
     /**

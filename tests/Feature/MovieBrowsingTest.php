@@ -31,6 +31,30 @@ test('the aisles filter by decade, genre and search', function () {
             ->where('movies.data.0.title', 'Christine'));
 });
 
+test('the aisles search matches director names', function () {
+    $fulci = Person::factory()->create(['name' => 'Lucio Fulci']);
+    $beyond = Movie::factory()->create(['title' => 'The Beyond']);
+    $beyond->people()->attach($fulci, ['role' => CreditRole::Director->value, 'order' => 0]);
+    Movie::factory()->create(['title' => 'Inferno']);
+
+    $this->actingAs(User::factory()->create())
+        ->get(route('movies.index', ['q' => 'fulci']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('movies.data', 1)
+            ->where('movies.data.0.title', 'The Beyond'));
+});
+
+test('sorting by title ignores a leading article', function () {
+    foreach (['The Thing', 'Alien', 'A Bay of Blood', 'Zombi 2'] as $title) {
+        Movie::factory()->create(['title' => $title]);
+    }
+
+    $this->actingAs(User::factory()->create())
+        ->get(route('movies.index', ['sort' => 'title']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('movies.data', fn ($movies) => collect($movies)->pluck('title')->all() === ['Alien', 'A Bay of Blood', 'The Thing', 'Zombi 2']));
+});
+
 test('the aisles can show only what I own in a format, with owned formats on each card', function () {
     $user = User::factory()->create();
     $vhs = Movie::factory()->create();

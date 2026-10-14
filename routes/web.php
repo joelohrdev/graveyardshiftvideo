@@ -3,6 +3,7 @@
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CopyController;
 use App\Http\Controllers\DirectorController;
+use App\Http\Controllers\FranchiseController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MovieController;
 use App\Http\Controllers\MovieImportController;
@@ -17,6 +18,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('aisles', [MovieController::class, 'index'])->name('movies.index');
     Route::get('movies/tmdb-search', [MovieImportController::class, 'search'])->middleware('throttle:30,1')->name('movies.tmdb-search');
+    Route::get('movies/barcode', [MovieImportController::class, 'barcode'])->middleware('throttle:30,1')->name('movies.barcode');
     Route::post('movies', [MovieImportController::class, 'store'])->name('movies.store');
     Route::get('movies/{movie}', [MovieController::class, 'show'])->name('movies.show');
     Route::delete('movies', [MovieController::class, 'destroyMany'])->name('movies.destroy-many');
@@ -27,6 +29,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('directors', [DirectorController::class, 'index'])->name('directors.index');
     Route::get('people/{person}', [PersonController::class, 'show'])->name('people.show');
+
+    Route::get('franchises', [FranchiseController::class, 'index'])->name('franchises.index');
+    Route::get('franchises/{franchise}', [FranchiseController::class, 'show'])->name('franchises.show');
 
     Route::get('want-list', [WatchController::class, 'index'])->name('watches.index');
     Route::post('movies/{movie}/watches', [WatchController::class, 'store'])->name('watches.store');

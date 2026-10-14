@@ -31,6 +31,7 @@ import {
 import { spineStock, tmdbImage } from '@/lib/store';
 import { destroy, store, update } from '@/routes/copies';
 import { index as aisles } from '@/routes/movies';
+import { show as showFranchise } from '@/routes/franchises';
 import { show as showPerson } from '@/routes/people';
 import { store as storeWatch } from '@/routes/watches';
 import type { Copy, FormatValue, Option, PersonRef, Watch } from '@/types';
@@ -59,6 +60,12 @@ type Movie = {
 
 type Props = {
     movie: Movie;
+    franchise: {
+        id: number;
+        name: string;
+        movies_count: number;
+        owned_count: number;
+    } | null;
     copies: Copy[];
     watches: Watch[];
     formats: Option<FormatValue>[];
@@ -67,6 +74,7 @@ type Props = {
 
 export default function MovieShow({
     movie,
+    franchise,
     copies,
     watches,
     formats,
@@ -173,6 +181,24 @@ export default function MovieShow({
                                     </span>
                                 ))}
                             </p>
+                        )}
+
+                        {franchise && (
+                            <Link
+                                href={showFranchise(franchise.id)}
+                                className="flex flex-wrap items-baseline gap-x-3 border border-border px-3 pt-1.5 pb-1 hover:border-osd"
+                            >
+                                <span className="text-muted-foreground">
+                                    Part of
+                                </span>
+                                <span className="text-lg text-label">
+                                    {franchise.name}
+                                </span>
+                                <span className="text-muted-foreground tabular-nums">
+                                    you own {franchise.owned_count} of{' '}
+                                    {franchise.movies_count}
+                                </span>
+                            </Link>
                         )}
 
                         {movie.overview && (

@@ -76,7 +76,12 @@ export default function CollectionIndex({
             <div className="space-y-10 px-4 sm:px-8">
                 <PageSign
                     title="My Shelf"
-                    actions={<AddMovieDialog />}
+                    actions={
+                        <>
+                            <AddMovieDialog scan />
+                            <AddMovieDialog />
+                        </>
+                    }
                     description={
                         stats.movies > 0 ? (
                             <>
