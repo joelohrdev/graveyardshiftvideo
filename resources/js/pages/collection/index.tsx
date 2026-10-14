@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
+import { AddMovieDialog } from '@/components/store/add-movie-dialog';
 import { AllRented } from '@/components/store/all-rented';
 import { Clamshell } from '@/components/store/clamshell';
 import { OsdText } from '@/components/store/crt-screen';
@@ -75,6 +76,7 @@ export default function CollectionIndex({
             <div className="space-y-10 px-4 sm:px-8">
                 <PageSign
                     title="My Shelf"
+                    actions={<AddMovieDialog />}
                     description={
                         stats.movies > 0 ? (
                             <>

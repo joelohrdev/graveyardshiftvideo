@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\MediaFormat;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class ImportMovieRequest extends FormRequest
 {
@@ -17,6 +19,7 @@ class ImportMovieRequest extends FormRequest
         return [
             'tmdb_id' => ['required', 'integer', 'min:1'],
             'title' => ['required', 'string', 'max:255'],
+            'format' => ['nullable', Rule::enum(MediaFormat::class)],
         ];
     }
 }

@@ -13,7 +13,16 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { tmdbImage } from '@/lib/store';
+import { FormatSticker } from '@/components/store/format-sticker';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { formatLabels, tmdbImage } from '@/lib/store';
+import type { FormatValue } from '@/types';
 import { show, store, tmdbSearch } from '@/routes/movies';
 
 type SearchResult = {
@@ -23,15 +32,18 @@ type SearchResult = {
     poster_path: string | null;
     overview: string | null;
     movie_id: number | null;
+    owned_formats: FormatValue[];
 };
 
 /**
- * Finds a movie on TMDB by title, in any genre, and pulls its full record
- * into the store. For titles the horror import missed.
+ * Finds a movie on TMDB by title, in any genre. From a result you can put a
+ * copy straight on your shelf (importing the movie first if the store doesn't
+ * have it) without leaving the search, or just add it to the store.
  */
 export function AddMovieDialog() {
     const [open, setOpen] = useState(false);
     const [adding, setAdding] = useState<number | null>(null);
+    const [formats, setFormats] = useState<Record<number, FormatValue>>({});
     const [failed, setFailed] = useState(false);
     const search = useHttp<
         { q: string; year: string },
@@ -50,10 +62,7 @@ export function AddMovieDialog() {
 
         const timer = setTimeout(() => {
             search.cancel();
-            search
-                .get(tmdbSearch.url())
-                .then(() => setFailed(false))
-                .catch(() => setFailed(true));
+            void runSearch();
         }, 350);
 
         return () => clearTimeout(timer);
@@ -61,7 +70,32 @@ export function AddMovieDialog() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [q, year]);
 
-    const add = (result: SearchResult) => {
+    const runSearch = () =>
+        search
+            .get(tmdbSearch.url())
+            .then(() => setFailed(false))
+            .catch(() => setFailed(true));
+
+    const addToShelf = (result: SearchResult) => {
+        router.post(
+            store.url(),
+            {
+                tmdb_id: result.tmdb_id,
+                title: result.title,
+                format: formats[result.tmdb_id] ?? 'vhs',
+            },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                onStart: () => setAdding(result.tmdb_id),
+                onFinish: () => setAdding(null),
+                // Refresh the results so the new format tag shows up.
+                onSuccess: () => void runSearch(),
+            },
+        );
+    };
+
+    const addToStore = (result: SearchResult) => {
         router.post(
             store.url(),
             { tmdb_id: result.tmdb_id, title: result.title },
@@ -88,8 +122,8 @@ export function AddMovieDialog() {
                 <DialogHeader>
                     <DialogTitle>Add a movie</DialogTitle>
                     <DialogDescription>
-                        Search TMDB by title. Any genre works, so you can add
-                        anything the horror import missed.
+                        Search TMDB by title, in any genre. Pick a format to put
+                        a copy on your shelf without leaving the search.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -158,7 +192,7 @@ export function AddMovieDialog() {
                                 return (
                                     <li
                                         key={result.tmdb_id}
-                                        className="flex items-start gap-3 py-3"
+                                        className="flex flex-wrap items-start gap-3 py-3"
                                     >
                                         {poster ? (
                                             <img
@@ -185,29 +219,101 @@ export function AddMovieDialog() {
                                                 </p>
                                             )}
                                         </div>
-                                        {result.movie_id ? (
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() =>
-                                                    router.visit(
-                                                        show(result.movie_id!),
-                                                    )
-                                                }
-                                            >
-                                                In store
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                size="sm"
-                                                disabled={adding !== null}
-                                                onClick={() => add(result)}
-                                            >
-                                                {adding === result.tmdb_id
-                                                    ? 'Adding…'
-                                                    : 'Add'}
-                                            </Button>
-                                        )}
+                                        <div className="flex w-full shrink-0 flex-col items-start gap-2 sm:w-auto sm:items-end">
+                                            <div className="flex items-center gap-2">
+                                                <Select
+                                                    value={
+                                                        formats[
+                                                            result.tmdb_id
+                                                        ] ?? 'vhs'
+                                                    }
+                                                    onValueChange={(format) =>
+                                                        setFormats(
+                                                            (current) => ({
+                                                                ...current,
+                                                                [result.tmdb_id]:
+                                                                    format as FormatValue,
+                                                            }),
+                                                        )
+                                                    }
+                                                >
+                                                    <SelectTrigger
+                                                        size="sm"
+                                                        className="w-28"
+                                                        aria-label={`Format for ${result.title}`}
+                                                    >
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {(
+                                                            Object.keys(
+                                                                formatLabels,
+                                                            ) as FormatValue[]
+                                                        ).map((format) => (
+                                                            <SelectItem
+                                                                key={format}
+                                                                value={format}
+                                                            >
+                                                                {
+                                                                    formatLabels[
+                                                                        format
+                                                                    ]
+                                                                }
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <Button
+                                                    size="sm"
+                                                    disabled={adding !== null}
+                                                    onClick={() =>
+                                                        addToShelf(result)
+                                                    }
+                                                >
+                                                    {adding === result.tmdb_id
+                                                        ? 'Adding…'
+                                                        : 'Add to my shelf'}
+                                                </Button>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {result.owned_formats.map(
+                                                    (format) => (
+                                                        <FormatSticker
+                                                            key={format}
+                                                            format={format}
+                                                        />
+                                                    ),
+                                                )}
+                                                {result.movie_id ? (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() =>
+                                                            router.visit(
+                                                                show(
+                                                                    result.movie_id!,
+                                                                ),
+                                                            )
+                                                        }
+                                                    >
+                                                        Open
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        disabled={
+                                                            adding !== null
+                                                        }
+                                                        onClick={() =>
+                                                            addToStore(result)
+                                                        }
+                                                    >
+                                                        Add to store only
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
                                     </li>
                                 );
                             })}
