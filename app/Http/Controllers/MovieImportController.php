@@ -31,8 +31,17 @@ class MovieImportController extends Controller
             'year' => ['nullable', 'integer', 'min:1880', 'max:2100'],
         ]);
 
+        $year = isset($validated['year']) ? (int) $validated['year'] : null;
+
         try {
-            $results = $tmdb->searchMovies($validated['q'], isset($validated['year']) ? (int) $validated['year'] : null);
+            $results = $tmdb->searchMovies($validated['q'], $year);
+
+            // "Lucio Fulci's The Beyond": TMDB titles rarely carry the possessive credit, so retry without it.
+            $withoutCredit = $this->withoutPossessiveCredit($validated['q']);
+
+            if ($results === [] && $withoutCredit !== null) {
+                $results = $tmdb->searchMovies($withoutCredit, $year);
+            }
         } catch (ConnectionException|RequestException $exception) {
             report($exception);
 
@@ -60,6 +69,18 @@ class MovieImportController extends Controller
                     ->all() ?? [],
             ], array_slice($results, 0, 12)),
         ]);
+    }
+
+    /**
+     * The title part of a "Director's Title" search, or null when there's no possessive credit.
+     */
+    protected function withoutPossessiveCredit(string $query): ?string
+    {
+        if (! preg_match("/^.+?['’]s\\s+(.{2,})$/u", trim($query), $matches)) {
+            return null;
+        }
+
+        return trim($matches[1]);
     }
 
     /**

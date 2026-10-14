@@ -53,6 +53,23 @@ test('searching TMDB flags titles already in the store', function () {
         && $request['query'] === 'return of the living dead');
 });
 
+test('a director credit in the search is dropped when the full phrase finds nothing', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        'api.themoviedb.org/3/search/movie?query=Lucio%20Fulci%27s%20The%20Beyond*' => Http::response(['results' => []]),
+        'api.themoviedb.org/3/search/movie?query=The%20Beyond*' => Http::response(['results' => [
+            ['id' => 19204, 'title' => 'The Beyond', 'release_date' => '1981-04-29'],
+        ]]),
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->getJson(route('movies.tmdb-search', ['q' => "Lucio Fulci's The Beyond"]))
+        ->assertOk()
+        ->assertJsonPath('results.0.title', 'The Beyond');
+
+    Http::assertSentCount(2);
+});
+
 test('adding a movie fetches its full TMDB record and opens it', function () {
     Http::preventStrayRequests();
     Http::fake([
