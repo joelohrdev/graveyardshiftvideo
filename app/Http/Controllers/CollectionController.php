@@ -22,7 +22,7 @@ class CollectionController extends Controller
     /**
      * @var list<string>
      */
-    public const array Groupings = ['director', 'decade', 'format', 'subgenre'];
+    public const array Groupings = ['all', 'director', 'decade', 'format', 'subgenre'];
 
     /**
      * A subgenre needs at least this many of my movies to earn its own shelf; the rest share "Everything else".
@@ -35,7 +35,7 @@ class CollectionController extends Controller
     public function index(Request $request): Response
     {
         $validated = $request->validate(['group' => ['nullable', Rule::in(self::Groupings)]]);
-        $group = $validated['group'] ?? 'director';
+        $group = $validated['group'] ?? 'all';
         $user = $request->user();
 
         $movies = Movie::query()
@@ -59,7 +59,12 @@ class CollectionController extends Controller
 
         return Inertia::render('collection/index', [
             'group' => $group,
-            'shelves' => $this->shelves($movies, $group),
+            'shelves' => $group === 'all' ? [] : $this->shelves($movies, $group),
+            'allMovies' => $group === 'all'
+                ? MovieCardResource::collection(
+                    $movies->sortBy(fn (Movie $movie): string => mb_strtolower($movie->title))->values(),
+                )->resolve()
+                : [],
             'stats' => [
                 'movies' => $movies->count(),
                 'copies' => (int) $copiesByFormat->sum(),

@@ -33,7 +33,7 @@ test('shelves group my movies by director, biggest shelf first', function () {
     Copy::factory()->for($notMine)->create();
 
     $this->actingAs($user)
-        ->get(route('collection.index'))
+        ->get(route('collection.index', ['group' => 'director']))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('collection/index')
@@ -47,6 +47,22 @@ test('shelves group my movies by director, biggest shelf first', function () {
             ->where('stats.movies', 3)
             ->where('stats.copies', 3)
             ->where('stats.directors', 2));
+});
+
+test('my shelf lists every movie A to Z by default', function () {
+    $user = User::factory()->create();
+    foreach (['the Thing', 'Halloween', 'Alien', 'Suspiria'] as $title) {
+        Copy::factory()->for($user)->for(Movie::factory()->state(['title' => $title]))->create();
+    }
+    Copy::factory()->for(Movie::factory()->state(['title' => 'Not Mine']))->create();
+
+    $this->actingAs($user)
+        ->get(route('collection.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('group', 'all')
+            ->where('shelves', [])
+            ->where('allMovies', fn ($movies) => collect($movies)->pluck('title')->all() === ['Alien', 'Halloween', 'Suspiria', 'the Thing']));
 });
 
 test('shelves group by decade and by format', function () {

@@ -13,13 +13,14 @@ import { cn } from '@/lib/utils';
 import { index as collection } from '@/routes/collection';
 import { index as aisles } from '@/routes/movies';
 import { index as wantList } from '@/routes/watches';
-import type { Copy, FormatValue, Shelf, Watch } from '@/types';
+import type { Copy, FormatValue, MovieCard, Shelf, Watch } from '@/types';
 
-type Grouping = 'director' | 'decade' | 'format' | 'subgenre';
+type Grouping = 'all' | 'director' | 'decade' | 'format' | 'subgenre';
 
 type Props = {
     group: Grouping;
     shelves: Shelf[];
+    allMovies: MovieCard[];
     stats: {
         movies: number;
         copies: number;
@@ -31,6 +32,7 @@ type Props = {
 };
 
 const groupings: { value: Grouping; label: string }[] = [
+    { value: 'all', label: 'A–Z' },
     { value: 'director', label: 'Director' },
     { value: 'decade', label: 'Decade' },
     { value: 'format', label: 'Format' },
@@ -40,6 +42,7 @@ const groupings: { value: Grouping; label: string }[] = [
 export default function CollectionIndex({
     group,
     shelves,
+    allMovies,
     stats,
     recentCopies,
     hotDeals,
@@ -94,9 +97,15 @@ export default function CollectionIndex({
                             {groupings.map((grouping) => (
                                 <Link
                                     key={grouping.value}
-                                    href={collection({
-                                        query: { group: grouping.value },
-                                    })}
+                                    href={
+                                        grouping.value === 'all'
+                                            ? collection()
+                                            : collection({
+                                                  query: {
+                                                      group: grouping.value,
+                                                  },
+                                              })
+                                    }
                                     preserveScroll
                                     className={cn(
                                         'px-3 pt-1 pb-0.5 text-xl uppercase',
@@ -116,7 +125,7 @@ export default function CollectionIndex({
                         </nav>
                     </div>
 
-                    {shelves.length === 0 ? (
+                    {stats.movies === 0 ? (
                         <AllRented title="Your shelf is empty">
                             Find a movie in{' '}
                             <Link
@@ -127,6 +136,12 @@ export default function CollectionIndex({
                             </Link>{' '}
                             and add the copy you own.
                         </AllRented>
+                    ) : group === 'all' ? (
+                        <div className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                            {allMovies.map((movie) => (
+                                <Clamshell key={movie.id} movie={movie} />
+                            ))}
+                        </div>
                     ) : (
                         <div className="space-y-12">
                             {shelves.map((shelf) => (
