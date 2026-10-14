@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\ExcludedMovie;
 use App\Models\Movie;
 use App\Services\Tmdb\TmdbClient;
 use DateTimeInterface;
@@ -63,7 +64,21 @@ class ImportDiscoverPage implements ShouldQueue
             return;
         }
 
-        $rows = array_map($this->movieRow(...), $discovered['results']);
+        $excluded = ExcludedMovie::query()
+            ->whereIn('tmdb_id', array_column($discovered['results'], 'id'))
+            ->pluck('tmdb_id')
+            ->all();
+
+        $results = array_values(array_filter(
+            $discovered['results'],
+            fn (array $result): bool => ! in_array((int) $result['id'], $excluded, true),
+        ));
+
+        if ($results === []) {
+            return;
+        }
+
+        $rows = array_map($this->movieRow(...), $results);
 
         Movie::upsert($rows, ['tmdb_id'], array_keys(array_diff_key($rows[0], ['tmdb_id' => true, 'created_at' => true])));
 

@@ -16,6 +16,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('aisles', [MovieController::class, 'index'])->name('movies.index');
     Route::get('movies/{movie}', [MovieController::class, 'show'])->name('movies.show');
+    Route::delete('movies', [MovieController::class, 'destroyMany'])->name('movies.destroy-many');
 
     Route::post('movies/{movie}/copies', [CopyController::class, 'store'])->name('copies.store');
     Route::patch('copies/{copy}', [CopyController::class, 'update'])->name('copies.update');

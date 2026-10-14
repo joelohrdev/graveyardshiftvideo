@@ -5,6 +5,7 @@ use App\Enums\CreditRole;
 use App\Jobs\ImportDiscoverPage;
 use App\Jobs\SyncMovieDetails;
 use App\Models\Copy;
+use App\Models\ExcludedMovie;
 use App\Models\Movie;
 use App\Services\Tmdb\TmdbClient;
 use Illuminate\Bus\PendingBatch;
@@ -88,6 +89,23 @@ test('re-running a discover page does not duplicate movies', function () {
     (new ImportDiscoverPage(27, 1981))->handle(app(TmdbClient::class));
 
     expect(Movie::count())->toBe(1);
+});
+
+test('a discover page skips movies that were removed from the store', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        'api.themoviedb.org/3/discover/movie*' => Http::response(discoverPage([
+            discoverResult(10, 'The Evil Dead'),
+            discoverResult(11, 'Not Actually Horror'),
+        ])),
+    ]);
+    Queue::fake([SyncMovieDetails::class]);
+    ExcludedMovie::factory()->create(['tmdb_id' => 11]);
+
+    (new ImportDiscoverPage(27, 1981))->handle(app(TmdbClient::class));
+
+    expect(Movie::pluck('tmdb_id')->all())->toBe([10]);
+    Queue::assertPushed(SyncMovieDetails::class, 1);
 });
 
 test('syncing details stores directors, top cast, genres and keywords', function () {

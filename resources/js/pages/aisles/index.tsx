@@ -1,13 +1,24 @@
 import { Head, InfiniteScroll, router } from '@inertiajs/react';
+import { CheckSquare, Trash2, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { AllRented } from '@/components/store/all-rented';
 import { Clamshell, ClamshellSkeleton } from '@/components/store/clamshell';
 import { FilterSelect } from '@/components/store/filter-select';
 import { PageSign } from '@/components/store/page-sign';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { index as aisles } from '@/routes/movies';
+import { index as aisles, destroyMany } from '@/routes/movies';
 import type { FormatValue, MovieCard, Option, Paginated } from '@/types';
 
 type Filters = {
@@ -49,9 +60,48 @@ export default function AislesIndex({
     const [search, setSearch] = useState(filters.q);
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const grid = useRef<HTMLDivElement>(null);
+    const [selecting, setSelecting] = useState(false);
+    const [selected, setSelected] = useState<Set<number>>(new Set());
+    const [confirming, setConfirming] = useState(false);
+    const [removing, setRemoving] = useState(false);
+
+    const toggle = (movieId: number) =>
+        setSelected((current) => {
+            const next = new Set(current);
+
+            if (next.has(movieId)) {
+                next.delete(movieId);
+            } else {
+                next.add(movieId);
+            }
+
+            return next;
+        });
+
+    const stopSelecting = () => {
+        setSelecting(false);
+        setSelected(new Set());
+    };
+
+    const removeSelected = () => {
+        router.delete(destroyMany.url(), {
+            data: { ids: [...selected] },
+            preserveScroll: true,
+            reset: ['movies'],
+            onStart: () => setRemoving(true),
+            onFinish: () => setRemoving(false),
+            onSuccess: () => {
+                setConfirming(false);
+                stopSelecting();
+            },
+        });
+    };
 
     const browse = (changes: Partial<Filters>) => {
         const next = { ...filters, ...changes };
+
+        // Never delete something that a filter change has scrolled out of view.
+        setSelected(new Set());
         const query = Object.fromEntries(
             Object.entries({
                 ...next,
@@ -93,6 +143,23 @@ export default function AislesIndex({
                 <PageSign
                     title="The Aisles"
                     description={`Every horror movie in the store, ${catalogSize.toLocaleString()} tapes deep. Your copies carry a sticker.`}
+                    actions={
+                        movies.data.length > 0 &&
+                        (selecting ? (
+                            <Button variant="secondary" onClick={stopSelecting}>
+                                <X />
+                                Done
+                            </Button>
+                        ) : (
+                            <Button
+                                variant="secondary"
+                                onClick={() => setSelecting(true)}
+                            >
+                                <CheckSquare />
+                                Select
+                            </Button>
+                        ))
+                    }
                 />
 
                 <section
@@ -214,12 +281,91 @@ export default function AislesIndex({
                             className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
                         >
                             {movies.data.map((movie) => (
-                                <Clamshell key={movie.id} movie={movie} />
+                                <Clamshell
+                                    key={movie.id}
+                                    movie={movie}
+                                    selection={
+                                        selecting
+                                            ? {
+                                                  selected: selected.has(
+                                                      movie.id,
+                                                  ),
+                                                  onToggle: () =>
+                                                      toggle(movie.id),
+                                              }
+                                            : undefined
+                                    }
+                                />
                             ))}
                         </div>
                     </InfiniteScroll>
                 )}
             </div>
+
+            {selecting && (
+                <div className="sticky bottom-4 z-40 mx-4 mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 border border-osd/60 bg-night/95 px-4 py-3 sm:mx-8">
+                    <span className="osd-text text-2xl tabular-nums">
+                        {selected.size} selected
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                            setSelected(
+                                new Set(movies.data.map((movie) => movie.id)),
+                            )
+                        }
+                    >
+                        Select all {movies.data.length} shown
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={selected.size === 0}
+                        onClick={() => setSelected(new Set())}
+                    >
+                        Clear
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        className="ml-auto"
+                        disabled={selected.size === 0}
+                        onClick={() => setConfirming(true)}
+                    >
+                        <Trash2 />
+                        Delete {selected.size || ''}
+                    </Button>
+                </div>
+            )}
+
+            <Dialog open={confirming} onOpenChange={setConfirming}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            Delete {selected.size}{' '}
+                            {selected.size === 1 ? 'movie' : 'movies'}?
+                        </DialogTitle>
+                        <DialogDescription>
+                            They're removed from the store and future TMDB
+                            imports will skip them. Anything on your shelf or
+                            want list is kept.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button variant="secondary">Cancel</Button>
+                        </DialogClose>
+                        <Button
+                            variant="destructive"
+                            disabled={removing}
+                            onClick={removeSelected}
+                        >
+                            <Trash2 />
+                            Delete {selected.size === 1 ? 'movie' : 'movies'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

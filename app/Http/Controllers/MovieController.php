@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\RemoveMovies;
 use App\Enums\ListingCondition;
 use App\Enums\MediaFormat;
+use App\Http\Requests\DestroyMoviesRequest;
 use App\Http\Resources\CopyResource;
 use App\Http\Resources\MovieCardResource;
 use App\Http\Resources\WatchResource;
@@ -13,6 +15,7 @@ use App\Models\Movie;
 use App\Models\Person;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
@@ -81,8 +84,28 @@ class MovieController extends Controller
                 'sort' => $filters['sort'] ?? 'popular',
             ],
             'facets' => Inertia::once(fn (): array => $this->facets()),
-            'catalogSize' => Inertia::once(fn (): int => Movie::query()->count()),
+            'catalogSize' => Movie::query()->count(),
         ]);
+    }
+
+    /**
+     * Remove a batch of movies from the store so they stay out of future imports.
+     */
+    public function destroyMany(DestroyMoviesRequest $request, RemoveMovies $removeMovies): RedirectResponse
+    {
+        ['removed' => $removed, 'kept' => $kept] = $removeMovies->handle($request->movieIds());
+
+        $message = $removed === 1 ? 'Removed 1 movie.' : "Removed {$removed} movies.";
+
+        if ($kept > 0) {
+            $message .= $kept === 1
+                ? ' Kept 1 that is on your shelf or want list.'
+                : " Kept {$kept} that are on your shelf or want list.";
+        }
+
+        Inertia::flash('toast', ['type' => $removed > 0 ? 'success' : 'info', 'message' => $message]);
+
+        return back();
     }
 
     /**
