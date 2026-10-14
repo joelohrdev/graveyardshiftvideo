@@ -61,7 +61,7 @@ class MovieImportController extends Controller
                     ->unique()
                     ->values()
                     ->all() ?? [],
-            ], array_slice($results, 0, 12)),
+            ], array_slice($results, 0, TmdbMovieFinder::MaxResults)),
         ]);
     }
 

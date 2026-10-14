@@ -17,6 +17,11 @@ class TmdbMovieFinder
 
     public const int MaxResults = 20;
 
+    /**
+     * Person lookups per search, so a long query doesn't fan out into many API calls.
+     */
+    public const int MaxPersonLookups = 4;
+
     public function __construct(protected TmdbClient $tmdb) {}
 
     /**
@@ -26,24 +31,25 @@ class TmdbMovieFinder
     {
         $query = trim($query);
 
-        $results = $this->tmdb->searchMovies($query, $year);
+        // A director's films come first: title search alone buries them ("fulci" matches documentaries,
+        // "zombi" matches dozens of titles before Zombi 2).
+        $byPerson = $this->byPerson($query, $year);
 
-        if ($results !== []) {
-            return $results;
-        }
+        $byTitle = $this->tmdb->searchMovies($query, $year);
 
         // "Lucio Fulci's The Beyond": TMDB titles rarely carry the possessive credit.
         $withoutCredit = $this->withoutPossessiveCredit($query);
 
-        if ($withoutCredit !== null) {
-            $results = $this->tmdb->searchMovies($withoutCredit, $year);
-
-            if ($results !== []) {
-                return $results;
-            }
+        if ($byTitle === [] && $withoutCredit !== null) {
+            $byTitle = $this->tmdb->searchMovies($withoutCredit, $year);
         }
 
-        return $this->byPerson($query, $year);
+        return collect($byPerson)
+            ->concat($byTitle)
+            ->unique('id')
+            ->take(self::MaxResults)
+            ->values()
+            ->all();
     }
 
     /**
@@ -68,7 +74,13 @@ class TmdbMovieFinder
     {
         $words = $this->words(str_replace(["'s ", '’s '], ' ', $query.' '));
 
+        $lookups = 0;
+
         foreach ($this->nameSplits($words) as [$name, $rest]) {
+            if (! $this->worthLookingUp($name) || ++$lookups > self::MaxPersonLookups) {
+                continue;
+            }
+
             $person = $this->person($name);
 
             if ($person === null) {
@@ -103,6 +115,16 @@ class TmdbMovieFinder
     }
 
     /**
+     * A lone short word ("the", "of", "2") is not worth a person search.
+     *
+     * @param  list<string>  $nameWords
+     */
+    protected function worthLookingUp(array $nameWords): bool
+    {
+        return count($nameWords) > 1 || mb_strlen($nameWords[0] ?? '') >= 4;
+    }
+
+    /**
      * The most popular person whose name contains every one of the given words.
      *
      * @param  list<string>  $nameWords
@@ -110,11 +132,6 @@ class TmdbMovieFinder
      */
     protected function person(array $nameWords): ?array
     {
-        // A lone short word ("the", "of") is not worth a person search.
-        if (count($nameWords) === 1 && mb_strlen($nameWords[0]) < 4) {
-            return null;
-        }
-
         foreach ($this->tmdb->searchPeople(implode(' ', $nameWords)) as $person) {
             $name = $this->words((string) ($person['name'] ?? ''));
 

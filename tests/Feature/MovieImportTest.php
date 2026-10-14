@@ -35,6 +35,7 @@ test('searching TMDB flags titles already in the store', function () {
             ['id' => 10925, 'title' => 'The Return of the Living Dead', 'release_date' => '1985-08-16', 'poster_path' => '/rotld.jpg'],
             ['id' => 999, 'title' => 'Return of the Living Dead Part II', 'release_date' => ''],
         ]]),
+        'api.themoviedb.org/3/search/person*' => Http::response(['results' => []]),
     ]);
     $user = User::factory()->create();
     $inStore = Movie::factory()->create(['tmdb_id' => 10925]);
@@ -60,6 +61,7 @@ test('a director credit in the search is dropped when the full phrase finds noth
         'api.themoviedb.org/3/search/movie?query=The%20Beyond*' => Http::response(['results' => [
             ['id' => 19204, 'title' => 'The Beyond', 'release_date' => '1981-04-29'],
         ]]),
+        'api.themoviedb.org/3/search/person*' => Http::response(['results' => []]),
     ]);
 
     $this->actingAs(User::factory()->create())
@@ -67,14 +69,18 @@ test('a director credit in the search is dropped when the full phrase finds noth
         ->assertOk()
         ->assertJsonPath('results.0.title', 'The Beyond');
 
-    Http::assertSentCount(2);
+    Http::assertSent(fn (Request $request) => str_contains($request->url(), 'search/movie')
+        && $request['query'] === 'The Beyond');
 });
 
-function fakeFulciCredits(): void
+/**
+ * @param  list<array<string, mixed>>  $titleMatches  what TMDB's plain title search returns
+ */
+function fakeFulciCredits(array $titleMatches = []): void
 {
     Http::preventStrayRequests();
     Http::fake([
-        'api.themoviedb.org/3/search/movie*' => Http::response(['results' => []]),
+        'api.themoviedb.org/3/search/movie*' => Http::response(['results' => $titleMatches]),
         'api.themoviedb.org/3/search/person*' => Http::response(['results' => [
             ['id' => 19429, 'name' => 'Lucio Fulci', 'known_for_department' => 'Directing'],
         ]]),
@@ -99,6 +105,18 @@ test('a director name plus title words finds that director\'s matching movies', 
         ->getJson(route('movies.tmdb-search', ['q' => 'Lucio Fulci zombi']))
         ->assertOk()
         ->assertJsonPath('results.*.title', ['Zombie Flesh Eaters', 'Zombi 3']);
+});
+
+test('a director\'s films come before title matches that bury them', function () {
+    fakeFulciCredits([
+        ['id' => 50, 'title' => 'Fulci for Fake', 'release_date' => '2019-09-03'],
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->getJson(route('movies.tmdb-search', ['q' => 'Fulci']))
+        ->assertOk()
+        ->assertJsonPath('results.0.title', 'Zombie Flesh Eaters')
+        ->assertJsonPath('results.4.title', 'Fulci for Fake');
 });
 
 test('a director name alone lists their movies in release order', function () {
