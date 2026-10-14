@@ -5,6 +5,7 @@ use App\Http\Controllers\CopyController;
 use App\Http\Controllers\DirectorController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MovieController;
+use App\Http\Controllers\MovieImportController;
 use App\Http\Controllers\PersonController;
 use App\Http\Controllers\WatchController;
 use Illuminate\Support\Facades\Route;
@@ -15,6 +16,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('collection', [CollectionController::class, 'index'])->name('collection.index');
 
     Route::get('aisles', [MovieController::class, 'index'])->name('movies.index');
+    Route::get('movies/tmdb-search', [MovieImportController::class, 'search'])->middleware('throttle:30,1')->name('movies.tmdb-search');
+    Route::post('movies', [MovieImportController::class, 'store'])->name('movies.store');
     Route::get('movies/{movie}', [MovieController::class, 'show'])->name('movies.show');
     Route::delete('movies', [MovieController::class, 'destroyMany'])->name('movies.destroy-many');
 

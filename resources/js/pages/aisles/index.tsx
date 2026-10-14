@@ -1,6 +1,7 @@
 import { Head, InfiniteScroll, router } from '@inertiajs/react';
 import { CheckSquare, Trash2, X } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { AddMovieDialog } from '@/components/store/add-movie-dialog';
 import { AllRented } from '@/components/store/all-rented';
 import { Clamshell, ClamshellSkeleton } from '@/components/store/clamshell';
 import { FilterSelect } from '@/components/store/filter-select';
@@ -144,21 +145,27 @@ export default function AislesIndex({
                     title="The Aisles"
                     description={`Every horror movie in the store, ${catalogSize.toLocaleString()} tapes deep. Your copies carry a sticker.`}
                     actions={
-                        movies.data.length > 0 &&
-                        (selecting ? (
-                            <Button variant="secondary" onClick={stopSelecting}>
-                                <X />
-                                Done
-                            </Button>
-                        ) : (
-                            <Button
-                                variant="secondary"
-                                onClick={() => setSelecting(true)}
-                            >
-                                <CheckSquare />
-                                Select
-                            </Button>
-                        ))
+                        <>
+                            <AddMovieDialog />
+                            {movies.data.length > 0 &&
+                                (selecting ? (
+                                    <Button
+                                        variant="secondary"
+                                        onClick={stopSelecting}
+                                    >
+                                        <X />
+                                        Done
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        variant="secondary"
+                                        onClick={() => setSelecting(true)}
+                                    >
+                                        <CheckSquare />
+                                        Select
+                                    </Button>
+                                ))}
+                        </>
                     }
                 />
 

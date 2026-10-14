@@ -44,6 +44,24 @@ class TmdbClient
     }
 
     /**
+     * Movies of any genre whose title matches, most relevant first.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function searchMovies(string $query, ?int $year = null): array
+    {
+        return $this->request()
+            ->get('search/movie', array_filter([
+                'query' => $query,
+                'year' => $year,
+                'include_adult' => 'false',
+                'page' => 1,
+            ]))
+            ->throw()
+            ->json('results') ?? [];
+    }
+
+    /**
      * Full movie details with credits and keywords, or null when TMDB no longer has the movie.
      *
      * @return array<string, mixed>|null
