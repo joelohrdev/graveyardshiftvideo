@@ -70,6 +70,46 @@ test('a director credit in the search is dropped when the full phrase finds noth
     Http::assertSentCount(2);
 });
 
+function fakeFulciCredits(): void
+{
+    Http::preventStrayRequests();
+    Http::fake([
+        'api.themoviedb.org/3/search/movie*' => Http::response(['results' => []]),
+        'api.themoviedb.org/3/search/person*' => Http::response(['results' => [
+            ['id' => 19429, 'name' => 'Lucio Fulci', 'known_for_department' => 'Directing'],
+        ]]),
+        'api.themoviedb.org/3/person/19429/movie_credits*' => Http::response([
+            'crew' => [
+                ['id' => 1, 'title' => 'Zombie Flesh Eaters', 'original_title' => 'Zombi 2', 'release_date' => '1979-08-25', 'job' => 'Director'],
+                ['id' => 2, 'title' => 'City of the Living Dead', 'original_title' => 'Paura nella città dei morti viventi', 'release_date' => '1980-08-11', 'job' => 'Director'],
+                ['id' => 3, 'title' => 'Zombi 3', 'original_title' => 'Zombi 3', 'release_date' => '1988-01-01', 'job' => 'Director'],
+                ['id' => 1, 'title' => 'Zombie Flesh Eaters', 'original_title' => 'Zombi 2', 'release_date' => '1979-08-25', 'job' => 'Writer'],
+            ],
+            'cast' => [
+                ['id' => 4, 'title' => 'Cat in the Brain', 'original_title' => 'Un gatto nel cervello', 'release_date' => '1990-01-01'],
+            ],
+        ]),
+    ]);
+}
+
+test('a director name plus title words finds that director\'s matching movies', function () {
+    fakeFulciCredits();
+
+    $this->actingAs(User::factory()->create())
+        ->getJson(route('movies.tmdb-search', ['q' => 'Lucio Fulci zombi']))
+        ->assertOk()
+        ->assertJsonPath('results.*.title', ['Zombie Flesh Eaters', 'Zombi 3']);
+});
+
+test('a director name alone lists their movies in release order', function () {
+    fakeFulciCredits();
+
+    $this->actingAs(User::factory()->create())
+        ->getJson(route('movies.tmdb-search', ['q' => 'fulci']))
+        ->assertOk()
+        ->assertJsonPath('results.*.title', ['Zombie Flesh Eaters', 'City of the Living Dead', 'Zombi 3', 'Cat in the Brain']);
+});
+
 test('adding a movie fetches its full TMDB record and opens it', function () {
     Http::preventStrayRequests();
     Http::fake([

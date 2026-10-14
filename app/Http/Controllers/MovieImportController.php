@@ -9,7 +9,7 @@ use App\Models\Copy;
 use App\Models\ExcludedMovie;
 use App\Models\Movie;
 use App\Services\Barcode\BarcodeLookup;
-use App\Services\Tmdb\TmdbClient;
+use App\Services\Tmdb\TmdbMovieFinder;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -23,9 +23,9 @@ use Inertia\Inertia;
 class MovieImportController extends Controller
 {
     /**
-     * Search TMDB by title (any genre) and flag results already in the store.
+     * Search TMDB by title or director (any genre) and flag results already in the store.
      */
-    public function search(Request $request, TmdbClient $tmdb): JsonResponse
+    public function search(Request $request, TmdbMovieFinder $finder): JsonResponse
     {
         $validated = $request->validate([
             'q' => ['required', 'string', 'min:2', 'max:100'],
@@ -35,14 +35,7 @@ class MovieImportController extends Controller
         $year = isset($validated['year']) ? (int) $validated['year'] : null;
 
         try {
-            $results = $tmdb->searchMovies($validated['q'], $year);
-
-            // "Lucio Fulci's The Beyond": TMDB titles rarely carry the possessive credit, so retry without it.
-            $withoutCredit = $this->withoutPossessiveCredit($validated['q']);
-
-            if ($results === [] && $withoutCredit !== null) {
-                $results = $tmdb->searchMovies($withoutCredit, $year);
-            }
+            $results = $finder->find($validated['q'], $year);
         } catch (ConnectionException|RequestException $exception) {
             report($exception);
 
@@ -110,18 +103,6 @@ class MovieImportController extends Controller
             'format' => $found['format']?->value,
             'listings' => $found['listings'],
         ]);
-    }
-
-    /**
-     * The title part of a "Director's Title" search, or null when there's no possessive credit.
-     */
-    protected function withoutPossessiveCredit(string $query): ?string
-    {
-        if (! preg_match("/^.+?['’]s\\s+(.{2,})$/u", trim($query), $matches)) {
-            return null;
-        }
-
-        return trim($matches[1]);
     }
 
     /**

@@ -236,8 +236,9 @@ export function AddMovieDialog({ scan = false }: { scan?: boolean }) {
                 <DialogHeader>
                     <DialogTitle>Add a movie</DialogTitle>
                     <DialogDescription>
-                        Search TMDB by title, in any genre. Pick a format to put
-                        a copy on your shelf without leaving the search.
+                        Search TMDB by title or director, in any genre ("Lucio
+                        Fulci zombi" works). Pick a format to put a copy on your
+                        shelf without leaving the search.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -343,7 +344,9 @@ export function AddMovieDialog({ scan = false }: { scan?: boolean }) {
 
                 <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_8rem]">
                     <div className="grid gap-1.5">
-                        <Label htmlFor="add-movie-title">Title</Label>
+                        <Label htmlFor="add-movie-title">
+                            Title or director
+                        </Label>
                         <Input
                             id="add-movie-title"
                             type="search"

@@ -62,6 +62,31 @@ class TmdbClient
     }
 
     /**
+     * People whose name matches, most popular first.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function searchPeople(string $query): array
+    {
+        return $this->request()
+            ->get('search/person', ['query' => $query, 'include_adult' => 'false', 'page' => 1])
+            ->throw()
+            ->json('results') ?? [];
+    }
+
+    /**
+     * Every movie a person directed or appeared in.
+     *
+     * @return array{cast: list<array<string, mixed>>, crew: list<array<string, mixed>>}
+     */
+    public function personMovieCredits(int $personId): array
+    {
+        $credits = $this->request()->get("person/{$personId}/movie_credits")->throw()->json();
+
+        return ['cast' => $credits['cast'] ?? [], 'crew' => $credits['crew'] ?? []];
+    }
+
+    /**
      * Full movie details with credits and keywords, or null when TMDB no longer has the movie.
      *
      * @return array<string, mixed>|null
